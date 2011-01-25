@@ -48,7 +48,7 @@ class UserTwitter(models.Model):
 class Tweet(models.Model):
     user = models.ForeignKey(UserTwitter, related_name='tweets')
     text = models.CharField(max_length=300)
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField()#timezone?
     tweet_id = models.BigIntegerField()
 
 class Manager(models.Model):
@@ -71,15 +71,15 @@ class Manager(models.Model):
     def search_for_first_tweets(self, min_page, max_page):
         print 'searching for first tweets'
         api = tweepy.API()
-        search_page = (max_page - min_page) / 2
+        search_page = min_page + ((max_page - min_page) / 2)
         print "trying page %d" % search_page
         tweets = api.user_timeline(self.user.username, include_rts=True, page=search_page, count=tweets_per_page)
         # handle no tweets returned... test that this doesn't blow up
         if not tweets:
-            return search_for_first_tweets(min_page=min_page, max_page=search_page)
+            return self.search_for_first_tweets(min_page=min_page, max_page=search_page)
         # if exactly 20, max_id search with oldest tweet
-        if tweets == 20:
-            pass
+        if len(tweets) == tweets_per_page:
+            return self.search_for_first_tweets(min_page=search_page, max_page=max_page)
         return tweets
 
     def fetch_first_page(self):
