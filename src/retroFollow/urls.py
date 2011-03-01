@@ -8,4 +8,5 @@ urlpatterns = patterns('',
     (r'^admin/', include(admin.site.urls)),
     (r'^b/(\S+)/$', 'retroFollow.views.old_user_timeline'),
     (r'^(\S+)/$', 'retroFollow.views.user_timeline'),
+    (r'^(\S+)/(\d+)$', 'retroFollow.views.user_timeline'),
 )

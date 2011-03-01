@@ -96,3 +96,5 @@ INSTALLED_APPS = (
 )
 
 tweets_per_page = 20
+tweets_per_user = 3200
+max_page = tweets_per_user / tweets_per_page
