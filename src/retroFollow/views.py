@@ -43,7 +43,7 @@ def user_timeline(request, username, page_num=1):
     manager, created = Manager.objects.get_or_create(user=user)
     tweets = manager.fetch_page(page_num) #also fetch if user !created, but tweets not in db
 
-    return render_to_response('user_timeline.html', {'tweets':tweets, 'user':user, 'hasNext':True})
+    return render_to_response('user_timeline.html', {'tweets':tweets, 'user':user, 'next_page':int(page_num)+1,})
 
 def old_user_timeline(request, username):
     print 'why?'

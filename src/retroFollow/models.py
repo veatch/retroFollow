@@ -69,12 +69,14 @@ class Manager(models.Model):
             print '%s %s' % (e.response.status, e.response.reason)
         #    return render_to_response('user_timeline.html', {'error_message':'shit'})
         # also show join date
-        for tweet in tweets:
-            Tweet.objects.get_or_create(user=self.user, text=tweet.text, created_at=tweet.created_at, tweet_id=tweet.id)
+        else:
+            for tweet in tweets:
+                Tweet.objects.get_or_create(user=self.user, text=tweet.text, created_at=tweet.created_at, tweet_id=tweet.id)
 
-        if tweets:
-            return True
-        return False
+            if tweets:
+                return True
+        return False # what if 400, but next succeeds, even though this was right page? exception should be propogated instead of
+        # failing silently
 
     def search_for_first_tweets(self, min_page, max_page):
         print 'binary searching for first tweets'
@@ -171,6 +173,9 @@ class Manager(models.Model):
                 # You could also start requesting in the other direction, and if 3rd transaction fails
                 # you still have first two because they were earlier. But don't like that if tweet
                 # occurs during a series of requests, a tweet could get lost because of page shift.
+                if Tweet.objects.filter(user=self.user).count() < tweets_per_page*page_num:
+                    self.fetch_twitter_page(first_page_num - page_num - 1)
+                    self.fetch_twitter_page(first_page_num - page_num)
         else:
             print 'already in database'
         return Tweet.objects.filter(user=self.user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num]

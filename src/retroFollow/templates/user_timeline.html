@@ -10,7 +10,11 @@
 {% for t in tweets %}
     <li>{{t.text}} <br/> --  {{t.created_at}}<br/><br/></li>
 {% endfor %}
+{% if next_page %}
+<li align="center"><a href={{next_page}}>next</a></li>
+{% endif %}
 </ul>
+
 </div>
 <div style='float:right;'></div>
 </div>
