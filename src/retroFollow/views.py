@@ -3,6 +3,7 @@
 import tweepy
 
 from django.shortcuts import render_to_response
+from django.template import RequestContext
 
 from tweepy.error import TweepError
 
@@ -36,11 +37,14 @@ def user_timeline(request, username, page_num=1):
     if username == 'favicon.ico':
         return None
     # if user is protected, offer oauth
+    # docs say not to use get_or_create in get views
     user, created = UserTwitter.objects.get_or_create(username=username)
     manager, created = Manager.objects.get_or_create(user=user)
     tweets = manager.fetch_page(page_num) #also fetch if user !created, but tweets not in db
 
-    return render_to_response('user_timeline.html', {'tweets':tweets, 'user':user, 'next_page':int(page_num)+1,})
+    return render_to_response('user_timeline.html',
+                             {'tweets':tweets, 'user':user, 'next_page':int(page_num)+1,},
+                             context_instance=RequestContext(request),)
 
 def old_user_timeline(request, username):
     print 'why?'

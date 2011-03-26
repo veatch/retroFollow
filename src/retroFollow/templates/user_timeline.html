@@ -1,3 +1,4 @@
+{% load retro_follow_tags %}
 {% if error_message %}{{ error_message }} {% endif %}
 <body style='margin:0px; background-color:black;'>
 <div> looks like this user's earliest tweets are no longer available
@@ -8,7 +9,7 @@
 {% endif %}
 <ul style='list-style-type:none'>
 {% for t in tweets %}
-    <li>{{t.text}} <br/> --  {{t.created_at}}<br/><br/></li>
+    <li>{{t.text|urlize|atreply:request.META.HTTP_HOST}} <br/> --  {{t.created_at}}<br/><br/></li>{# add empty #}
 {% endfor %}
 {% if next_page %}
 <li align="center"><a href={{next_page}}>next</a></li>
