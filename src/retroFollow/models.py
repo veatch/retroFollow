@@ -78,22 +78,46 @@ class Manager(models.Model):
         return False # what if 400, but next succeeds, even though this was right page? exception should be propogated instead of
         # failing silently
 
+    def fetch_later_twitter_page(self, first_page_num, request_page_num):
+        '''
+        Like fetch_twitter_page(), but keep fetching until we hit an existing tweet.
+        '''
+        api = tweepy.API()
+        page_num = first_page_num - request_page_num - 2
+        while page_num <= first_page_num: # figure out how to make larger requests and spare some traffic
+            print 'fetch later twitter page %d' % page_num
+            try:
+                tweets = api.user_timeline(self.user.username, include_rts=True, page=page_num, count=tweets_per_page)
+            except tweepy.TweepError as e:
+                print '%s %s' % (e.response.status, e.response.reason)
+            #    return render_to_response('user_timeline.html', {'error_message':'shit'})
+            # also show join date
+            else:
+                for tweet in tweets:
+                    _, created = Tweet.objects.get_or_create(user=self.user, text=tweet.text, created_at=tweet.created_at, tweet_id=tweet.id)
+                    if not created:
+                        return
+            # if you start 400'ing, abort
+            page_num = page_num + 1
+
+    # what's faster? searching, or making one request with many tweets per page?
     def search_for_first_tweets(self, min_page, max_page):
         print 'binary searching for first tweets'
         api = tweepy.API()
-        search_page = min_page + ((max_page - min_page) / 2)
+        search_page = min_page + ((max_page - min_page) / 2) # problem with over max num tweets, step back extra page to be sure
         print "trying page %d" % search_page
         try:
             tweets = api.user_timeline(self.user.username, include_rts=True, page=search_page, count=tweets_per_page)
         except tweepy.TweepError as e:
             print '%s %s' % (e.response.status, e.response.reason)
         # handle no tweets returned... test that this doesn't blow up
-        if not tweets:
-            return self.search_for_first_tweets(min_page=min_page, max_page=search_page)
-        # if exactly 20, max_id search with oldest tweet
-        if len(tweets) == tweets_per_page:
-            return self.search_for_first_tweets(min_page=search_page, max_page=max_page)
-        return search_page, tweets
+        else:
+            if not tweets:
+                return self.search_for_first_tweets(min_page=min_page, max_page=search_page)
+            # if exactly 20, max_id search with oldest tweet
+            if len(tweets) == tweets_per_page:
+                return self.search_for_first_tweets(min_page=search_page, max_page=max_page)
+            return search_page, tweets
 
     def find_first_page(self, user_tweet_count):
         print 'find first page'
@@ -102,6 +126,8 @@ class Manager(models.Model):
                 # if twitter's page count is off, search for first page
                 # try next five pages
                 for i in range (1, 6):
+                    if first_page_num-i == 0:
+                        return 0
                     print 'trying %d' % (first_page_num-i)
                     if self.fetch_twitter_page(first_page_num-i):
                         print 'first page is %d' % (first_page_num-i)
@@ -133,13 +159,14 @@ class Manager(models.Model):
 
         # timeline for user 'shah' is totally f'd... random tweet on pg23, first page is actually 18
         # too handle cases like these, keep searching for first page until you have at least 20 tweets
-        while(Tweet.objects.filter(user=self.user).count() < tweets_per_page):
+        while(Tweet.objects.filter(user=self.user).count() < tweets_per_page and first_page_num > 0):
             print 'not enough tweets, into the while loop'
             first_page_num = first_page_searcher(first_page_num-1)
             fetch_bounding_pages(first_page_num)
 
         return first_page_num
 
+    # handle protected accounts
     # 400 is status during rate limiting... catch consistently and display friendly message
     def fetch_page(self, page_num):
         page_num = int(page_num)
@@ -150,7 +177,7 @@ class Manager(models.Model):
             try:
                 api_user = api.get_user(self.user.username)
             except tweepy.TweepError as e:
-                print '%s %s' % (e.response.status, e.response.reason)
+                print '%s %s' % ((e.response.status or e.response), (e.response.reason or e.response))
             else:
                 user_tweet_count = api_user.statuses_count
 
@@ -174,8 +201,7 @@ class Manager(models.Model):
                 # you still have first two because they were earlier. But don't like that if tweet
                 # occurs during a series of requests, a tweet could get lost because of page shift.
                 if Tweet.objects.filter(user=self.user).count() < tweets_per_page*page_num:
-                    self.fetch_twitter_page(first_page_num - page_num - 1)
-                    self.fetch_twitter_page(first_page_num - page_num)
+                    self.fetch_later_twitter_page(first_page_num, page_num)#handle case where someone enters number > number of available tweets
         else:
             print 'already in database'
         return Tweet.objects.filter(user=self.user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num]

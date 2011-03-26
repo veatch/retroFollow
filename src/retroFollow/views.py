@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 
-import datetime
 import tweepy
 
 from django.shortcuts import render_to_response
 
-from operator import attrgetter
 from tweepy.error import TweepError
 
 # importing settings like this is bad?
 import settings
-from settings import tweets_per_page
 from models import UserTwitter, Tweet, Manager
 
 # get storage set up
@@ -53,4 +50,4 @@ def old_user_timeline(request, username):
         tweets = twit.fetch_initial_tweets(api, username)
     except (TweepError):
         return render_to_response('user_timeline.html', {'error_message':'oh nooooooooo'})
-    return render_to_response('user_timeline.html', {'tweets':tweets})
+    return render_to_response('user_timeline.html', {'tweets':tweets})#'next_page':True/False
