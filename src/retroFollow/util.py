@@ -1,3 +1,4 @@
+from datetime import timedelta
 import tweepy
 
 from models import Tweet, UserTwitter
@@ -6,7 +7,15 @@ from settings import tweets_per_page, tweets_per_user, max_page
 # handle protected accounts
 # 400 is status during rate limiting... catch consistently and display friendly message
 def fetch_page(username, page_num):
-    #user = None
+    def utc_to_user_time(tweet_datetime):
+        # figure out why twitter tz names don't work
+        # set up mapping of US tz's to standard names
+        # use tz name, if fail, use offset
+        # ***adjust for DST***
+        if user.utc_offset:
+            return tweet_datetime + timedelta(seconds=user.utc_offset)
+        return tweet_datetime
+
     def fetch_twitter_page(page_num):
         """
         return true if tweets fetched successfully, false if not
@@ -21,8 +30,7 @@ def fetch_page(username, page_num):
         # also show join date
         else:
             for tweet in tweets:
-                Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=tweet.created_at, tweet_id=tweet.id)
-
+                Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
             if tweets:
                 return True
         return False # what if 400, but next succeeds, even though this was right page? exception should be propogated instead of
@@ -44,7 +52,7 @@ def fetch_page(username, page_num):
             # also show join date
             else:
                 for tweet in tweets:
-                    _, created = Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=tweet.created_at, tweet_id=tweet.id)
+                    _, created = Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
                     if not created:
                         return
             # if you start 400'ing, abort
@@ -85,7 +93,7 @@ def fetch_page(username, page_num):
                 # if still haven't found it, binary search
                 page, tweets = search_for_first_tweets(min_page=0, max_page=first_page_num)
                 for tweet in tweets:
-                    Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=tweet.created_at, tweet_id=tweet.id)
+                    Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
                 print 'first page is %d' % page
                 return page
             print 'first page is %d' % first_page_num
@@ -117,10 +125,8 @@ def fetch_page(username, page_num):
         return first_page_num
 #################################################
     page_num = int(page_num)
-    print 'fetching page %d...' % page_num
 
-    user, created = UserTwitter.objects.get_or_create(username=username)
-    # clean Manager off db?
+    user, _ = UserTwitter.objects.get_or_create(username=username)
 
     if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
         api = tweepy.API()
@@ -129,6 +135,9 @@ def fetch_page(username, page_num):
         except tweepy.TweepError as e:
             print '%s %s' % ((e.response.status or e.response), (e.response.reason or e.response))
         else:
+            if not user.utc_offset:
+                user.utc_offset = api_user.utc_offset
+                user.save()
             user_tweet_count = api_user.statuses_count
 
             #make sure this only happens at creation

@@ -7,6 +7,7 @@ class UserTwitter(models.Model):
     '''
     username = models.CharField(unique=True, max_length=32)
     old_timer_and_or_gabber = models.BooleanField(default=False)
+    utc_offset = models.IntegerField(blank=True, null=True)
     #first_tweet_time = models.DateTimeField()
     #followers = models.ManyToManyField(RFUser, related_name='following')
     # first tweet time and id for use with new users?
