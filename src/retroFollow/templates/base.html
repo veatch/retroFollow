@@ -1,0 +1,22 @@
+<html>
+<head>
+<title>RetroFollow: {{username}}</title>
+<style type='text/css'>
+a { color:black; }
+span.permalink { font-size:0.8em; color:#666;}
+span.permalink a { color:#666; }
+</style>
+</head>
+{% if error_message %}{{ error_message }} {% endif %}
+<body style='margin:0px; background-color:black;'>
+
+<div style='float:left; width:500px; padding-left:150px; padding-right:150px; padding-top:50px; background-color:white;'>
+<b>{{username}}</b>
+
+{% block body %}
+{% endblock %}
+
+</div>
+
+</body>
+</html>

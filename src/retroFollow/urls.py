@@ -5,8 +5,7 @@ from django.contrib import admin
 admin.autodiscover()
 
 urlpatterns = patterns('',
-    (r'^admin/', include(admin.site.urls)),
-    (r'^b/(\S+)/$', 'retroFollow.views.old_user_timeline'),
-    (r'^(\S+)/$', 'retroFollow.views.user_timeline'),
-    (r'^(\S+)/(\d+)$', 'retroFollow.views.user_timeline'),
+    (r'^([a-zA-Z0-9_]+)/$', 'retroFollow.views.user_timeline'),
+    (r'^([a-zA-Z0-9_]+)/(\d+)$', 'retroFollow.views.user_timeline'),
+    url(r'^([a-zA-Z0-9_]+)/status/(\d+)$', 'retroFollow.views.single_tweet', name='rf_single_tweet'),
 )

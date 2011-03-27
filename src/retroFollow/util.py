@@ -4,6 +4,9 @@ import tweepy
 from models import Tweet, UserTwitter
 from settings import tweets_per_page, tweets_per_user, max_page
 
+def fetch_tweet(username, tweet_id):
+    return Tweet.objects.filter(user__username=username).filter(tweet_id=long(tweet_id))[0]
+
 # handle protected accounts
 # 400 is status during rate limiting... catch consistently and display friendly message
 def fetch_page(username, page_num):

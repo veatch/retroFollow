@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% load retro_follow_tags %}
+
+{% block body %}
+<ul style='list-style-type:none'><li>
+{{tweet.text|urlize|atreply:request.META.HTTP_HOST}} <br/> <span class='permalink'>--  {{tweet.created_at}}</span>
+</li></ul>
+{% endblock %}
