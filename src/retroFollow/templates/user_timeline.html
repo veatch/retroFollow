@@ -12,8 +12,14 @@
 	<br/> <span class='permalink'>--  <a href='{{t.get_absolute_url}}'>{{t.created_at}}</a></span><br/><br/>
 	</li>{# add empty #}
 {% endfor %}
+
 {% if next_page %}
-<li align="center"><a href={{next_page}}>next</a></li>
+<li align="center">
+	{% if prev_page %}
+	<a href={{prev_page}}>previous</a> |
+	{% endif %}
+<a href={{next_page}}>next</a>
+</li>
 {% endif %}
 </ul>
 {% endblock %}

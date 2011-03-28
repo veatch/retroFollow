@@ -3,6 +3,6 @@
 
 {% block body %}
 <ul style='list-style-type:none'><li>
-{{tweet.text|urlize|atreply:request.META.HTTP_HOST}} <br/> <span class='permalink'>--  {{tweet.created_at}}</span>
-</li></ul>
+{{tweet.text|urlize|atreply:request.META.HTTP_HOST}} <br/> <span class='permalink'>--  <a href='http://www.twitter.com/{{username}}/status/{{tweet.tweet_id}}'>{{tweet.created_at}}</a></span>
+</li></ul><br/><br/>
 {% endblock %}
