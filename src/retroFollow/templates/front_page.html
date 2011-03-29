@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<script type='text/javascript'>
+function form_submit(){
+	var span = document.getElementById('submit_span');
+	var button = document.getElementById('submit_button');
+	span.removeChild(button);
+	span.innerHTML = 'loading...'
+}
+</script>
+<p>Look at anyone's tweets from the beginning.<p/>
+<p><form action="/" method="get" onsubmit="return form_submit()">{{form}}<span id="submit_span"><input id="submit_button" type="submit" value="go"></span></form></p>
+<p>or add it to the end of the url in the address bar, for example http://veatch.webfactional.com/<b>some_user_name</b></p>
+<br/><br/>
+{% endblock %}
