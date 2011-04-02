@@ -1,6 +1,17 @@
 {% extends 'base.html' %}
 
 {% block body %}
-We're having trouble. Twitter might be down, or we might be making too many requests right now.
-<p>If twitter is up, try <a href='/login'>logging in through twitter.</a></p>
+<ul style='list-style-type:none'><li>
+{% if error_status == '401' %}
+	Looks like this account is protected.
+	{% if not request.session.auth_username %}
+		<p>If you follow this person, <a href='/login'>log in through twitter</a> to see their twarchive.</p>
+	{% else %}
+		<br/><br/>
+	{% endif %}
+{% else %}
+	We're having trouble. Twitter might be down, or we might be making too many requests right now.
+	<p>If twitter is up, try <a href='/login'>logging in through twitter.</a></p>
+{% endif %}
+</li></ul>
 {% endblock %}

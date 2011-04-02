@@ -29,9 +29,9 @@ def user_timeline(request, username, page_num=1):
     access_token = request.session.get('access_token')
     if access_token:
         auth.set_access_token(access_token[0], access_token[1])
-    user, tweets = fetch_page(username, page_num, auth) #also fetch if user !created, but tweets not in db
+    user, tweets, http_status = fetch_page(username, page_num, auth) #also fetch if user !created, but tweets not in db
     if not tweets:
-        return general_error(request)
+        return general_error(request, username, http_status)
     #really need to pass user around?
 
     #  boolean for old tweets not available instead of passing user around
@@ -51,8 +51,9 @@ def single_tweet(request, username, tweet_id):
                               {'tweet':tweet, 'username':username,},
                               context_instance=RequestContext(request),)
 
-def general_error(request):
+def general_error(request, username, error_status):
     return render_to_response('error.html',
+                             {'username':username, 'error_status':str(error_status),},
                              context_instance=RequestContext(request),)
 
 def auth(request):
@@ -63,6 +64,7 @@ def auth(request):
         print 'Error! Failed to get request token.'
     else:
         request.session['twitter_request_token'] = (auth.request_token.key, auth.request_token.secret)
+        request.session['page_pre_auth'] = request.META.get('HTTP_REFERER')
         response = HttpResponseRedirect(redirect_url)
         return response
     return HttpResponseRedirect('/')
@@ -81,7 +83,7 @@ def callback(request):
         request.session['auth_username'] = auth.username
     except tweepy.TweepError:
         print 'Error! Failed to get access token.'
-    return HttpResponseRedirect('/')
+    return HttpResponseRedirect(request.session.get('page_pre_auth', '/'))
 
 def logout(request):
     request.session.flush()

@@ -130,42 +130,52 @@ def fetch_page(username, page_num, auth=None):
 # fetch_page starts here.
 #################################################
     page_num = int(page_num)
+    api = tweepy.API(auth)
 
     user, _ = UserTwitter.objects.get_or_create(username=username)
-    # if user is protected and we don't have access, don't return tweets
-    if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
-        api = tweepy.API(auth)
+    if user.is_protected:
         try:
             api_user = api.get_user(user.username)
         except tweepy.TweepError as e:
-            print '%s %s' % ((e.response.status or e.response), (e.response.reason or e.response))
+            return user, None, getattr(e.response, 'status', '')
         else:
-            if not user.utc_offset:
-                user.utc_offset = api_user.utc_offset
+            if not api_user.protected:
+                user.is_protected = False
                 user.save()
-            user_tweet_count = api_user.statuses_count
+            try: # refactor so this is avoided for new users
+                api.user_timeline(user.username, include_rts=True)
+            except tweepy.TweepError as e:
+                return user, None, getattr(e.response, 'status', '')
 
-            #make sure this only happens at creation
-            if user_tweet_count > tweets_per_user:
-                user.old_timer_and_or_gabber=True
-                user.save()
-            first_page_num = find_first_page(user_tweet_count)
-            # fetching should start early, and then move back in time. when you hit an existing tweet, you're done.
-            # so if 3rd page should be first_page_num-2, start one page before that, and keep fetching until you hit
-            # existing tweet
-            # Once you hit an existing tweet, should be safe to assume that all tweets before
-            # that are already in our db. How to make this assumption a reality?
+    if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
+        if not api_user:
+            api_user = api.get_user(user.username)
+        if not user.utc_offset: # this should be saved in our db on creation. if user changes timezones, tweets in out db won't be shown with new tz, right? not ideal, but nothing is
+            user.utc_offset = api_user.utc_offset
+            user.save()
+        user_tweet_count = api_user.statuses_count
 
-            # If there are 120 veatch tweets in db, you should know that those are first 120. There should be no
-            # possibility that it's 80 earliest tweets, and 40 later tweets because someone hit /veatch/15
-            # Need some sort of transactions... say a request is made that requires
-            # 4 requests. 3rd one fails. delete tweets from first two so integrity isn't comprommised
-            # maybe log username and page so that they can be manually retrieved later
-            # You could also start requesting in the other direction, and if 3rd transaction fails
-            # you still have first two because they were earlier. But don't like that if tweet
-            # occurs during a series of requests, a tweet could get lost because of page shift.
-            if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
-                fetch_later_twitter_page(first_page_num, page_num)#handle case where someone enters number > number of available tweets
+        #make sure this only happens at creation
+        if user_tweet_count > tweets_per_user:
+            user.old_timer_and_or_gabber=True
+            user.save()
+        first_page_num = find_first_page(user_tweet_count)
+        # fetching should start early, and then move back in time. when you hit an existing tweet, you're done.
+        # so if 3rd page should be first_page_num-2, start one page before that, and keep fetching until you hit
+        # existing tweet
+        # Once you hit an existing tweet, should be safe to assume that all tweets before
+        # that are already in our db. How to make this assumption a reality?
+
+        # If there are 120 veatch tweets in db, you should know that those are first 120. There should be no
+        # possibility that it's 80 earliest tweets, and 40 later tweets because someone hit /veatch/15
+        # Need some sort of transactions... say a request is made that requires
+        # 4 requests. 3rd one fails. delete tweets from first two so integrity isn't comprommised
+        # maybe log username and page so that they can be manually retrieved later
+        # You could also start requesting in the other direction, and if 3rd transaction fails
+        # you still have first two because they were earlier. But don't like that if tweet
+        # occurs during a series of requests, a tweet could get lost because of page shift.
+        if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
+            fetch_later_twitter_page(first_page_num, page_num)#handle case where someone enters number > number of available tweets
     else:
         print 'already in database'
-    return user, Tweet.objects.filter(user=user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num]
+    return user, Tweet.objects.filter(user=user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num], 200 # http_status
