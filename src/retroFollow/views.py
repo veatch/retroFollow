@@ -1,8 +1,10 @@
 import tweepy
 from django import forms
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render_to_response
 from django.template import RequestContext
 
+from settings import consumer_key, consumer_secret
 from util import fetch_page, fetch_tweet
 
 class UsernameForm(forms.Form):
@@ -10,7 +12,7 @@ class UsernameForm(forms.Form):
 
 def front_page(request):
     username = request.GET.get('enter_username_here')
-    if username:# reject empty form
+    if username:
         return redirect('/%s' % username)
     form = UsernameForm()
     return render_to_response('front_page.html', {'form':form})
@@ -22,7 +24,15 @@ def user_timeline(request, username, page_num=1):
     # if user is protected, offer oauth
     # take a look at IE before shipping
     # register app with twitter?
-    user, tweets = fetch_page(username, page_num) #also fetch if user !created, but tweets not in db
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    access_token = request.session.get('access_token')
+    if access_token:
+        auth.set_access_token(access_token[0], access_token[1])
+    user, tweets = fetch_page(username, page_num, auth) #also fetch if user !created, but tweets not in db
+    if not tweets:
+        return general_error(request)
+    #really need to pass user around?
+
     #  boolean for old tweets not available instead of passing user around
     # end of feed
     return render_to_response('user_timeline.html',
@@ -39,3 +49,32 @@ def single_tweet(request, username, tweet_id):
     return render_to_response('single_tweet.html',
                               {'tweet':tweet, 'username':username,},
                               context_instance=RequestContext(request),)
+
+def general_error(request):
+    return render_to_response('error.html')
+
+def auth(request):
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    try:
+        redirect_url = auth.get_authorization_url()
+    except tweepy.TweepError as e:
+        print 'Error! Failed to get request token.'
+    else:
+        request.session['twitter_request_token'] = (auth.request_token.key, auth.request_token.secret)
+        response = HttpResponseRedirect(redirect_url)
+        return response
+    return HttpResponseRedirect('/')
+
+def callback(request):
+    verifier = request.GET.get('oauth_verifier')
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    token = request.session.get('twitter_request_token')
+    request.session.delete('request_token')
+    auth.set_request_token(token[0], token[1])
+
+    try:
+        auth.get_access_token(verifier)
+        request.session['access_token'] = (auth.access_token.key, auth.access_token.secret)
+    except tweepy.TweepError:
+        print 'Error! Failed to get access token.'
+    return HttpResponseRedirect('/')

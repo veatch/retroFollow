@@ -4,12 +4,12 @@ import tweepy
 from models import Tweet, UserTwitter
 from settings import tweets_per_page, tweets_per_user, max_page
 
-def fetch_tweet(username, tweet_id):
+def fetch_tweet(username, tweet_id):# handle if we don't have tweet
     return Tweet.objects.filter(user__username=username).filter(tweet_id=long(tweet_id))[0]
 
 # handle protected accounts
 # 400 is status during rate limiting... catch consistently and display friendly message
-def fetch_page(username, page_num):
+def fetch_page(username, page_num, auth=None):
     def utc_to_user_time(tweet_datetime):
         # figure out why twitter tz names don't work
         # set up mapping of US tz's to standard names
@@ -24,7 +24,7 @@ def fetch_page(username, page_num):
         return true if tweets fetched successfully, false if not
         """
         print 'fetching page %d with tweepy' % page_num
-        api = tweepy.API()
+        api = tweepy.API(auth)
         try:
             tweets = api.user_timeline(user.username, include_rts=True, page=page_num, count=tweets_per_page)
         except tweepy.TweepError as e:
@@ -38,12 +38,12 @@ def fetch_page(username, page_num):
                 return True
         return False # what if 400, but next succeeds, even though this was right page? exception should be propogated instead of
         # failing silently
-
+# if oldtimer/gabber, first page will always be 160, so figuring out where later page should start from?
     def fetch_later_twitter_page(first_page_num, request_page_num):
         '''
         Like fetch_twitter_page(), but keep fetching until we hit an existing tweet.
         '''
-        api = tweepy.API()
+        api = tweepy.API(auth)
         page_num = first_page_num - request_page_num - 2
         while page_num <= first_page_num: # figure out how to make larger requests and spare some traffic
             print 'fetch later twitter page %d' % page_num
@@ -64,7 +64,7 @@ def fetch_page(username, page_num):
     # what's faster? searching, or making one request with many tweets per page?
     def search_for_first_tweets(min_page, max_page):
         print 'binary searching for first tweets'
-        api = tweepy.API()
+        api = tweepy.API(auth)
         search_page = min_page + ((max_page - min_page) / 2) # problem with over max num tweets, step back extra page to be sure
         print "trying page %d" % search_page
         try:
@@ -101,7 +101,7 @@ def fetch_page(username, page_num):
                 return page
             print 'first page is %d' % first_page_num
             return first_page_num
-
+# asdf2 = negative search, and then infinite zero
         def fetch_bounding_pages(first_page_num):
             ######
             # double check and fetch previous page here
@@ -127,12 +127,14 @@ def fetch_page(username, page_num):
 
         return first_page_num
 #################################################
+# fetch_page starts here.
+#################################################
     page_num = int(page_num)
 
     user, _ = UserTwitter.objects.get_or_create(username=username)
-
+    # if user is protected and we don't have access, don't return tweets
     if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
-        api = tweepy.API()
+        api = tweepy.API(auth)
         try:
             api_user = api.get_user(user.username)
         except tweepy.TweepError as e:
