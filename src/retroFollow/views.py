@@ -15,7 +15,8 @@ def front_page(request):
     if username:
         return redirect('/%s' % username)
     form = UsernameForm()
-    return render_to_response('front_page.html', {'form':form})
+    return render_to_response('front_page.html', {'form':form},
+    context_instance=RequestContext(request),)
 
 def user_timeline(request, username, page_num=1):
     # ignore favicon requests
@@ -51,7 +52,8 @@ def single_tweet(request, username, tweet_id):
                               context_instance=RequestContext(request),)
 
 def general_error(request):
-    return render_to_response('error.html')
+    return render_to_response('error.html',
+                             context_instance=RequestContext(request),)
 
 def auth(request):
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -71,10 +73,16 @@ def callback(request):
     token = request.session.get('twitter_request_token')
     request.session.delete('request_token')
     auth.set_request_token(token[0], token[1])
-
     try:
+        # patch tweepy to avoid two requests?
         auth.get_access_token(verifier)
+        auth.get_username()
         request.session['access_token'] = (auth.access_token.key, auth.access_token.secret)
+        request.session['auth_username'] = auth.username
     except tweepy.TweepError:
         print 'Error! Failed to get access token.'
     return HttpResponseRedirect('/')
+
+def logout(request):
+    request.session.flush()
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
