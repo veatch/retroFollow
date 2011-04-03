@@ -5,7 +5,7 @@ from django.shortcuts import redirect, render_to_response
 from django.template import RequestContext
 
 from settings import consumer_key, consumer_secret
-from util import fetch_page, fetch_tweet
+from util import fetch_page, fetch_tweet, setup_auth
 
 class UsernameForm(forms.Form):
     enter_username_here = forms.CharField()
@@ -25,15 +25,12 @@ def user_timeline(request, username, page_num=1):
     # if user is protected, offer oauth
     # take a look at IE before shipping
     # register app with twitter?
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    access_token = request.session.get('access_token')
-    if access_token:
-        auth.set_access_token(access_token[0], access_token[1])
+    auth = setup_auth(request)
     user, tweets, http_status = fetch_page(username, page_num, auth) #also fetch if user !created, but tweets not in db
     if not tweets:
         return general_error(request, username, http_status)
     #really need to pass user around?
-
+    # handle accounts, like 'shit', that have no tweets
     #  boolean for old tweets not available instead of passing user around
     # end of feed
     return render_to_response('user_timeline.html',
@@ -44,9 +41,11 @@ def single_tweet(request, username, tweet_id):
     # ignore favicon requests
     if username == 'favicon.ico':
         return None
-    # if user is protected, offer oauth
 
-    tweet = fetch_tweet(username, tweet_id)
+    auth = setup_auth(request)
+    tweet, http_status = fetch_tweet(username, tweet_id, auth)
+    if not tweet:
+        return general_error(request, username, http_status)
     return render_to_response('single_tweet.html',
                               {'tweet':tweet, 'username':username,},
                               context_instance=RequestContext(request),)

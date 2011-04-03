@@ -2,10 +2,22 @@ from datetime import timedelta
 import tweepy
 
 from models import Tweet, UserTwitter
-from settings import tweets_per_page, tweets_per_user, max_page
+from settings import tweets_per_page, tweets_per_user, max_page, consumer_key, consumer_secret
 
-def fetch_tweet(username, tweet_id):# handle if we don't have tweet
-    return Tweet.objects.filter(user__username=username).filter(tweet_id=long(tweet_id))[0]
+def setup_auth(request):
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    access_token = request.session.get('access_token')
+    if access_token:
+        auth.set_access_token(access_token[0], access_token[1])
+    return auth
+
+def fetch_tweet(username, tweet_id, auth):# handle if we don't have tweet
+    api = tweepy.API(auth)
+    try:
+        api.user_timeline(username, include_rts=True)
+    except tweepy.TweepError as e:
+        return None, getattr(e.response, 'status', '')
+    return Tweet.objects.filter(user__username=username).filter(tweet_id=long(tweet_id))[0], 200
 
 # handle protected accounts
 # 400 is status during rate limiting... catch consistently and display friendly message
@@ -111,7 +123,7 @@ def fetch_page(username, page_num, auth=None):
             if user_tweet_count % tweets_per_page != 0 and first_page_num != max_page:
            	    fetch_twitter_page(first_page_num+1)
 
-        first_page_num = user_tweet_count / tweets_per_page
+        first_page_num = (user_tweet_count / tweets_per_page) + 1 # see d profile
         if first_page_num > max_page:
             first_page_num = max_page
 
@@ -131,6 +143,7 @@ def fetch_page(username, page_num, auth=None):
 #################################################
     page_num = int(page_num)
     api = tweepy.API(auth)
+    api_user = None
 
     user, _ = UserTwitter.objects.get_or_create(username=username)
     if user.is_protected:
