@@ -3,6 +3,7 @@ from django.conf.urls.defaults import *
 # Uncomment the next two lines to enable the admin:
 from django.contrib import admin
 admin.autodiscover()
+handler404 = 'retroFollow.views.fourohfour'
 
 urlpatterns = patterns('',
     (r'^$', 'retroFollow.views.front_page'),

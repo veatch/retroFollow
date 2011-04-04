@@ -1,4 +1,5 @@
 from datetime import timedelta
+from django.http import Http404
 import tweepy
 
 from models import Tweet, UserTwitter
@@ -12,12 +13,16 @@ def setup_auth(request):
     return auth
 
 def fetch_tweet(username, tweet_id, auth):# handle if we don't have tweet
-    api = tweepy.API(auth)
+    api = tweepy.API(auth)#next few lines should only be done if user.is_protected
     try:
         api.user_timeline(username, include_rts=True)
     except tweepy.TweepError as e:
         return None, getattr(e.response, 'status', '')
-    return Tweet.objects.filter(user__username=username).filter(tweet_id=long(tweet_id))[0], 200
+    try:
+        tweet = Tweet.objects.get(user__username=username, tweet_id=long(tweet_id))
+    except Tweet.DoesNotExist:
+        raise Http404
+    return tweet, 200
 
 # handle protected accounts
 # 400 is status during rate limiting... catch consistently and display friendly message

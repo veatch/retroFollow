@@ -1,10 +1,10 @@
 import tweepy
 from django import forms
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import redirect, render_to_response
 from django.template import RequestContext
 
-from settings import consumer_key, consumer_secret
+from settings import consumer_key, consumer_secret, support_email
 from util import fetch_page, fetch_tweet, setup_auth
 
 class UsernameForm(forms.Form):
@@ -37,7 +37,7 @@ def user_timeline(request, username, page_num=1):
                              {'tweets':tweets, 'user':user, 'username':username, 'prev_page':int(page_num)-1, 'next_page':int(page_num)+1,},#detect when there are no more pages
                              context_instance=RequestContext(request),)
 
-def single_tweet(request, username, tweet_id):
+def single_tweet(request, username, tweet_id):#linkify username back to list?
     # ignore favicon requests
     if username == 'favicon.ico':
         return None
@@ -75,7 +75,7 @@ def callback(request):
     request.session.delete('request_token')
     auth.set_request_token(token[0], token[1])
     try:
-        # patch tweepy to avoid two requests?
+        # todo: patch tweepy to avoid two requests?
         auth.get_access_token(verifier)
         auth.get_username()
         request.session['access_token'] = (auth.access_token.key, auth.access_token.secret)
@@ -87,3 +87,6 @@ def callback(request):
 def logout(request):
     request.session.flush()
     return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+
+def fourohfour(request):
+    return render_to_response('404.html', {'support_email':support_email,},)
