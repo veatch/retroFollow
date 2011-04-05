@@ -22,12 +22,10 @@ def user_timeline(request, username, page_num=1):
     # ignore favicon requests
     if username == 'favicon.ico':
         return None
-    # if user is protected, offer oauth
     # take a look at IE before shipping
-    # register app with twitter?
     auth = setup_auth(request)
     user, tweets, http_status = fetch_page(username, page_num, auth) #also fetch if user !created, but tweets not in db
-    if not tweets:
+    if not tweets and http_status != 200:
         return general_error(request, username, http_status)
     #really need to pass user around?
     # handle accounts, like 'shit', that have no tweets
@@ -90,3 +88,6 @@ def logout(request):
 
 def fourohfour(request):
     return render_to_response('404.html', {'support_email':support_email,},)
+
+def five00(request):
+    return render_to_response('500.html', {'support_email':support_email,},)
