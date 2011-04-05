@@ -4,6 +4,7 @@ from django.conf.urls.defaults import *
 from django.contrib import admin
 admin.autodiscover()
 handler404 = 'retroFollow.views.fourohfour'
+handler500 = 'retroFollow.views.five00'
 
 urlpatterns = patterns('',
     (r'^$', 'retroFollow.views.front_page'),

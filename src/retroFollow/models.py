@@ -11,7 +11,7 @@ class Tweet(models.Model):
     user = models.ForeignKey(UserTwitter, related_name='tweets')
     text = models.CharField(max_length=300)
     created_at = models.DateTimeField()#timezone?
-    tweet_id = models.BigIntegerField()
+    tweet_id = models.BigIntegerField(unique=True)
 
     def get_absolute_url(self):
         return reverse('rf_single_tweet', args=[self.user.username, self.tweet_id])

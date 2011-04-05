@@ -12,19 +12,23 @@ def setup_auth(request):
         auth.set_access_token(access_token[0], access_token[1])
     return auth
 
-def fetch_tweet(username, tweet_id, auth):# handle if we don't have tweet
-    api = tweepy.API(auth)#next few lines should only be done if user.is_protected
+def fetch_tweet(username, tweet_id, auth):
     try:
-        api.user_timeline(username, include_rts=True)
-    except tweepy.TweepError as e:
-        return None, getattr(e.response, 'status', '')
+        user = UserTwitter.get(username=username)
+    except UserTwitter.DoesNotExist:
+        raise Http404
+    if user.is_protected:
+        api = tweepy.API(auth)
+        try:
+            api.user_timeline(username, include_rts=True)
+        except tweepy.TweepError as e:
+            return None, getattr(e.response, 'status', '')
     try:
         tweet = Tweet.objects.get(user__username=username, tweet_id=long(tweet_id))
     except Tweet.DoesNotExist:
         raise Http404
     return tweet, 200
 
-# handle protected accounts
 # 400 is status during rate limiting... catch consistently and display friendly message
 def fetch_page(username, page_num, auth=None):
     def utc_to_user_time(tweet_datetime):
@@ -167,7 +171,10 @@ def fetch_page(username, page_num, auth=None):
 
     if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
         if not api_user:
-            api_user = api.get_user(user.username)
+            try:
+                api_user = api.get_user(user.username)
+            except tweepy.TweepError as e:
+                return user, None, getattr(e.response, 'status', '')
         if not user.utc_offset: # this should be saved in our db on creation. if user changes timezones, tweets in out db won't be shown with new tz, right? not ideal, but nothing is
             user.utc_offset = api_user.utc_offset
             user.save()
