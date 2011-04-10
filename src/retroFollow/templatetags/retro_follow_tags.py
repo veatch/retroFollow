@@ -30,5 +30,3 @@ def atreply(value, host):
 
 # end readmindme
 #################################################
-
-# need to validate input, check for javascript, etc?

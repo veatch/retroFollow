@@ -24,18 +24,17 @@ def user_timeline(request, username, page_num=1):
         return None
     # take a look at IE before shipping
     auth = setup_auth(request)
-    user, tweets, http_status = fetch_page(username, page_num, auth) #also fetch if user !created, but tweets not in db
+    user, tweets, http_status = fetch_page(username, page_num, auth)
     if not tweets and http_status != 200:
         return general_error(request, username, http_status)
-    #really need to pass user around?
-    # handle accounts, like 'shit', that have no tweets
-    #  boolean for old tweets not available instead of passing user around
-    # end of feed
+    requested_page = page_num
+    if len(tweets) < 20: # todo: this won't work if last page has 20 tweets
+        page_num = -1 # we're on last page, so set page_num to -1 so next link won't show
     return render_to_response('user_timeline.html',
-                             {'tweets':tweets, 'user':user, 'username':username, 'prev_page':int(page_num)-1, 'next_page':int(page_num)+1,},#detect when there are no more pages
+                             {'tweets':tweets, 'username':user.username, 'old_timer_and_or_gabber':user.old_timer_and_or_gabber, 'requested_page':requested_page, 'prev_page':int(page_num)-1, 'next_page':int(page_num)+1,},#detect when there are no more pages
                              context_instance=RequestContext(request),)
 
-def single_tweet(request, username, tweet_id):#linkify username back to list?
+def single_tweet(request, username, tweet_id):#todo: linkify username back to list?
     # ignore favicon requests
     if username == 'favicon.ico':
         return None

@@ -14,7 +14,7 @@ def setup_auth(request):
 
 def fetch_tweet(username, tweet_id, auth):
     try:
-        user = UserTwitter.get(username=username)
+        user = UserTwitter.objects.get(username=username)
     except UserTwitter.DoesNotExist:
         raise Http404
     if user.is_protected:
@@ -29,10 +29,9 @@ def fetch_tweet(username, tweet_id, auth):
         raise Http404
     return tweet, 200
 
-# 400 is status during rate limiting... catch consistently and display friendly message
 def fetch_page(username, page_num, auth=None):
     def utc_to_user_time(tweet_datetime):
-        # figure out why twitter tz names don't work
+        # todo: figure out why twitter tz names don't work
         # set up mapping of US tz's to standard names
         # use tz name, if fail, use offset
         # ***adjust for DST***
@@ -50,34 +49,35 @@ def fetch_page(username, page_num, auth=None):
             tweets = api.user_timeline(user.username, include_rts=True, page=page_num, count=tweets_per_page)
         except tweepy.TweepError as e:
             print '%s %s' % (e.response.status, e.response.reason)
-        #    return render_to_response('user_timeline.html', {'error_message':'shit'})
-        # also show join date
         else:
             for tweet in tweets:
                 Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
             if tweets:
                 return True
-        return False # what if 400, but next succeeds, even though this was right page? exception should be propogated instead of
-        # failing silently
-# if oldtimer/gabber, first page will always be 160, so figuring out where later page should start from?
+        return False # todo: what if 400, but next succeeds, even though this was right page? exception should be propogated instead of failing silently
+
+# todo: if oldtimer/gabber, first page will always be 160, so figuring out where later page should start from?
     def fetch_later_twitter_page(first_page_num, request_page_num):
         '''
         Like fetch_twitter_page(), but keep fetching until we hit an existing tweet.
         '''
         api = tweepy.API(auth)
+        # Start fetching further in the future than necessary to give some padding. We do this by subtracting 2.
         page_num = first_page_num - request_page_num - 2
-        while page_num <= first_page_num: # figure out how to make larger requests and spare some traffic
+        if page_num < 0:
+            page_num = 0
+        while page_num <= first_page_num: # todo: figure out how to make larger requests and spare some traffic
             print 'fetch later twitter page %d' % page_num
             try:
                 tweets = api.user_timeline(user.username, include_rts=True, page=page_num, count=tweets_per_page)
             except tweepy.TweepError as e:
                 print '%s %s' % (e.response.status, e.response.reason)
-            #    return render_to_response('user_timeline.html', {'error_message':'shit'})
-            # also show join date
+
             else:
                 for tweet in tweets:
                     _, created = Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
-                    if not created:
+                    if not created:#if there were tweets during request, wouldn't first in next page be created?
+                    # maybe: have a flag that's set at beginning of tweets once you hit new tweet, and return once flag and created
                         return
             # if you start 400'ing, abort
             page_num = page_num + 1
@@ -153,14 +153,18 @@ def fetch_page(username, page_num, auth=None):
     page_num = int(page_num)
     api = tweepy.API(auth)
     api_user = None
-
+    # twitter bot to get over 3,200 tweets, then see if all are availabe when logged in
+    # user.username should be twitter username, not what user submitted. get caps right.
     user, _ = UserTwitter.objects.get_or_create(username=username)
-    if user.is_protected:
+    if user.is_protected: # is_protected defaults to True, so we'll always enter this block the first time
         try:
             api_user = api.get_user(user.username)
         except tweepy.TweepError as e:
             return user, None, getattr(e.response, 'status', '')
         else:
+            if api_user.statuses_count > tweets_per_user:
+                user.old_timer_and_or_gabber=True
+                user.save()
             if not api_user.protected:
                 user.is_protected = False
                 user.save()
@@ -178,13 +182,11 @@ def fetch_page(username, page_num, auth=None):
         if not user.utc_offset: # this should be saved in our db on creation. if user changes timezones, tweets in out db won't be shown with new tz, right? not ideal, but nothing is
             user.utc_offset = api_user.utc_offset
             user.save()
-        user_tweet_count = api_user.statuses_count
+        # possible for user to change capitalization of their username?
 
-        #make sure this only happens at creation
-        if user_tweet_count > tweets_per_user:
-            user.old_timer_and_or_gabber=True
-            user.save()
-        first_page_num = find_first_page(user_tweet_count)
+        # at this point, if rate_limit_status < 150, set auth=None... if < 50, cut off
+        # need to cache rate_limit status so it's called once every few requests, instead of for every page view
+        first_page_num = find_first_page(api_user.statuses_count)
         # fetching should start early, and then move back in time. when you hit an existing tweet, you're done.
         # so if 3rd page should be first_page_num-2, start one page before that, and keep fetching until you hit
         # existing tweet
@@ -203,4 +205,4 @@ def fetch_page(username, page_num, auth=None):
             fetch_later_twitter_page(first_page_num, page_num)#handle case where someone enters number > number of available tweets
     else:
         print 'already in database'
-    return user, Tweet.objects.filter(user=user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num], 200 # http_status
+    return user, Tweet.objects.filter(user=user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num], 200

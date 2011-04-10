@@ -2,17 +2,24 @@
 {% load retro_follow_tags %}
 
 {% block body %}
-{% if user.old_timer_and_or_gabber %}
+{% if old_timer_and_or_gabber and next_page == 2 %}
 <span style="float:right;">(looks like this user's earliest tweets are no longer available)</span>
 {% endif %}
 <ul style='list-style-type:none'>
-{% for t in tweets %}
-    <li>
-	{{t.text|urlize|atreply:request.META.HTTP_HOST}}
-	<br/> <span class='permalink'>--  <a href='{{t.get_absolute_url}}'>{{t.created_at}}</a></span><br/><br/>
-	</li>{# add empty #}
-{% endfor %}
-
+{% if tweets %}
+	{% for t in tweets %}
+	    <li>
+		{{t.text|urlize|atreply:request.META.HTTP_HOST}}
+		<br/> <span class='permalink'>--  <a href='{{t.get_absolute_url}}'>{{t.created_at}}</a></span><br/><br/>
+		</li>{# add empty #}
+	{% endfor %}
+{% else %}
+	{% if requested_page == 1 %}
+	<li>hasn't tweeted yet</li>
+	{% else %}
+	<li>No tweets here. Maybe try an earlier page?</li>
+	{% endif %}
+{% endif %}
 {% if next_page %}
 <li align="center">
 	{% if prev_page %}
