@@ -1,5 +1,6 @@
 from datetime import timedelta
 from django.http import Http404
+from string import lower
 import tweepy
 
 from models import Tweet, UserTwitter
@@ -132,7 +133,7 @@ def fetch_page(username, page_num, auth=None):
                 return page
             print 'first page is %d' % first_page_num
             return first_page_num
-# asdf2 = negative search, and then infinite zero
+
         def fetch_bounding_pages(first_page_num):
             ######
             # double check and fetch previous page here
@@ -164,15 +165,14 @@ def fetch_page(username, page_num, auth=None):
     api = tweepy.API(auth)
     api_user = None
     # todo: twitter bot to get over 3,200 tweets, then see if all are availabe when logged in
-    user, created = UserTwitter.objects.get_or_create(username=username)
-
+    user, created = UserTwitter.objects.get_or_create(username_slug=lower(username))
     if user.is_protected: # is_protected defaults to True, so we'll always enter this block the first time
         try:
-            api_user = api.get_user(user.username)
+            api_user = api.get_user(username)
         except tweepy.TweepError as e:
             if created:
                 user.delete()
-            return user, None, getattr(e.response, 'status', '')
+            return None, None, getattr(e.response, 'status', '')
         else:
             if not api_user.protected:
                 user.is_protected = False

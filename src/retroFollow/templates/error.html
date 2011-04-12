@@ -10,6 +10,7 @@
 		<br/><br/>
 	{% endif %}
 {% else %}
+	<!-- {{error_status}} -->
 	We're having trouble. Twitter might be down, or we might be making too many requests right now.
 	{% if not request.session.auth_username %}
 		<p>If twitter is up, try <a href='/login'>logging in through twitter.</a></p>
