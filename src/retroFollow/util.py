@@ -74,10 +74,20 @@ def fetch_page(username, page_num, auth=None):
                 print '%s %s' % (e.response.status, e.response.reason)
 
             else:
+                # 1. If user is tweeting while we fetch a series of their pages, at some point the first tweet(s) in a page will be tweet(s) we've already
+                # fetched. When we hit a tweet that's already in the database, we don't want to assume we've reached the end of new tweets and return
+                # prematurely, so we always start by assuming we're going back over tweets we just fetched.
+                going_back_over_tweets_we_just_fetched = True
                 for tweet in tweets:
                     _, created = Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
-                    if not created:#if there were tweets during request, wouldn't first in next page be created?
-                    # maybe: have a flag that's set at beginning of tweets once you hit new tweet, and return once flag and created
+                    if going_back_over_tweets_we_just_fetched:
+                        if created:
+                            # 2. As soon as we hit a tweet that isn't already in database, we know we're done going over stuff we just fetched,
+                            # and we're now fetching new stuff.
+                            going_back_over_tweets_we_just_fetched = False
+                        continue
+                    if not created:
+                    # 3. After that, when we hit a tweet that's already in our database, we know we've hit the old stuff, and we can stop fetching.
                         return
             # if you start 400'ing, abort
             page_num = page_num + 1
@@ -153,25 +163,30 @@ def fetch_page(username, page_num, auth=None):
     page_num = int(page_num)
     api = tweepy.API(auth)
     api_user = None
-    # twitter bot to get over 3,200 tweets, then see if all are availabe when logged in
-    # user.username should be twitter username, not what user submitted. get caps right.
-    user, _ = UserTwitter.objects.get_or_create(username=username)
+    # todo: twitter bot to get over 3,200 tweets, then see if all are availabe when logged in
+    user, created = UserTwitter.objects.get_or_create(username=username)
+
     if user.is_protected: # is_protected defaults to True, so we'll always enter this block the first time
         try:
             api_user = api.get_user(user.username)
         except tweepy.TweepError as e:
+            if created:
+                user.delete()
             return user, None, getattr(e.response, 'status', '')
         else:
-            if api_user.statuses_count > tweets_per_user:
-                user.old_timer_and_or_gabber=True
-                user.save()
             if not api_user.protected:
                 user.is_protected = False
                 user.save()
-            try: # refactor so this is avoided for new users
-                api.user_timeline(user.username, include_rts=True)
-            except tweepy.TweepError as e:
-                return user, None, getattr(e.response, 'status', '')
+            if created:
+                if api_user.statuses_count > tweets_per_user:
+                    user.old_timer_and_or_gabber=True
+                user.username = api_user.screen_name
+                user.save()
+            else: # If user protected and not just created, try a timeline fetch to see if we have permissions.
+                try:
+                    api.user_timeline(user.username, include_rts=True)
+                except tweepy.TweepError as e:
+                    return user, None, getattr(e.response, 'status', '')
 
     if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
         if not api_user:
@@ -182,16 +197,11 @@ def fetch_page(username, page_num, auth=None):
         if not user.utc_offset: # this should be saved in our db on creation. if user changes timezones, tweets in out db won't be shown with new tz, right? not ideal, but nothing is
             user.utc_offset = api_user.utc_offset
             user.save()
-        # possible for user to change capitalization of their username?
+        # todo: possible for user to change capitalization of their username?
 
         # at this point, if rate_limit_status < 150, set auth=None... if < 50, cut off
         # need to cache rate_limit status so it's called once every few requests, instead of for every page view
         first_page_num = find_first_page(api_user.statuses_count)
-        # fetching should start early, and then move back in time. when you hit an existing tweet, you're done.
-        # so if 3rd page should be first_page_num-2, start one page before that, and keep fetching until you hit
-        # existing tweet
-        # Once you hit an existing tweet, should be safe to assume that all tweets before
-        # that are already in our db. How to make this assumption a reality?
 
         # If there are 120 veatch tweets in db, you should know that those are first 120. There should be no
         # possibility that it's 80 earliest tweets, and 40 later tweets because someone hit /veatch/15
@@ -202,7 +212,7 @@ def fetch_page(username, page_num, auth=None):
         # you still have first two because they were earlier. But don't like that if tweet
         # occurs during a series of requests, a tweet could get lost because of page shift.
         if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
-            fetch_later_twitter_page(first_page_num, page_num)#handle case where someone enters number > number of available tweets
+            fetch_later_twitter_page(first_page_num, page_num)
     else:
         print 'already in database'
     return user, Tweet.objects.filter(user=user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num], 200

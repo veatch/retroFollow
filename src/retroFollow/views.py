@@ -71,7 +71,7 @@ def callback(request):
     token = request.session.get('twitter_request_token')
     request.session.delete('request_token')
     auth.set_request_token(token[0], token[1])
-    try:
+    try:# todo: on redirect, show page with spinner before, so they're not staring at twitter spinner?
         # todo: patch tweepy to avoid two requests?
         auth.get_access_token(verifier)
         auth.get_username()
