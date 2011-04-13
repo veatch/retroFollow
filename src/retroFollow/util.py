@@ -44,12 +44,11 @@ def fetch_page(username, page_num, auth=None):
         """
         return true if tweets fetched successfully, false if not
         """
-        print 'fetching page %d with tweepy' % page_num
         api = tweepy.API(auth)
         try:
             tweets = api.user_timeline(user.username, include_rts=True, page=page_num, count=tweets_per_page)
         except tweepy.TweepError as e:
-            print '%s %s' % (e.response.status, e.response.reason)
+            pass
         else:
             for tweet in tweets:
                 Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
@@ -68,11 +67,10 @@ def fetch_page(username, page_num, auth=None):
         if page_num < 0:
             page_num = 0
         while page_num <= first_page_num: # todo: figure out how to make larger requests and spare some traffic
-            print 'fetch later twitter page %d' % page_num
             try:
                 tweets = api.user_timeline(user.username, include_rts=True, page=page_num, count=tweets_per_page)
             except tweepy.TweepError as e:
-                print '%s %s' % (e.response.status, e.response.reason)
+                pass
 
             else:
                 # 1. If user is tweeting while we fetch a series of their pages, at some point the first tweet(s) in a page will be tweet(s) we've already
@@ -90,20 +88,17 @@ def fetch_page(username, page_num, auth=None):
                     if not created:
                     # 3. After that, when we hit a tweet that's already in our database, we know we've hit the old stuff, and we can stop fetching.
                         return
-            # if you start 400'ing, abort
+            # todo: if you start 400'ing, abort... keep list of just fetched tweets and delete them if there's a failure?
             page_num = page_num + 1
 
-    # what's faster? searching, or making one request with many tweets per page?
+    # todo: what's faster? searching, or making one request with many tweets per page?
     def search_for_first_tweets(min_page, max_page):
-        print 'binary searching for first tweets'
         api = tweepy.API(auth)
         search_page = min_page + ((max_page - min_page) / 2) # problem with over max num tweets, step back extra page to be sure
-        print "trying page %d" % search_page
         try:
             tweets = api.user_timeline(user.username, include_rts=True, page=search_page, count=tweets_per_page)
         except tweepy.TweepError as e:
-            print '%s %s' % (e.response.status, e.response.reason)
-        # handle no tweets returned... test that this doesn't blow up
+            pass
         else:
             if not tweets:
                 return search_for_first_tweets(min_page=min_page, max_page=search_page)
@@ -113,7 +108,6 @@ def fetch_page(username, page_num, auth=None):
             return search_page, tweets
 
     def find_first_page(user_tweet_count):
-        print 'find first page'
         def first_page_searcher(first_page_num):
             if not fetch_twitter_page(first_page_num):
                 # if twitter's page count is off, search for first page
@@ -121,17 +115,13 @@ def fetch_page(username, page_num, auth=None):
                 for i in range (1, 6):
                     if first_page_num-i == 0:
                         return 0
-                    print 'trying %d' % (first_page_num-i)
                     if fetch_twitter_page(first_page_num-i):
-                        print 'first page is %d' % (first_page_num-i)
                         return first_page_num-i
                 # if still haven't found it, binary search
                 page, tweets = search_for_first_tweets(min_page=0, max_page=first_page_num)
                 for tweet in tweets:
                     Tweet.objects.get_or_create(user=user, text=tweet.text, created_at=utc_to_user_time(tweet.created_at), tweet_id=tweet.id)
-                print 'first page is %d' % page
                 return page
-            print 'first page is %d' % first_page_num
             return first_page_num
 
         def fetch_bounding_pages(first_page_num):
@@ -151,9 +141,8 @@ def fetch_page(username, page_num, auth=None):
         fetch_bounding_pages(first_page_num)
 
         # timeline for user 'shah' is totally f'd... random tweet on pg23, first page is actually 18
-        # too handle cases like these, keep searching for first page until you have at least 20 tweets
+        # to handle cases like these, keep searching for first page until you have at least 20 tweets
         while(Tweet.objects.filter(user=user).count() < tweets_per_page and first_page_num > 0):
-            print 'not enough tweets, into the while loop'
             first_page_num = first_page_searcher(first_page_num-1)
             fetch_bounding_pages(first_page_num)
 
@@ -178,15 +167,16 @@ def fetch_page(username, page_num, auth=None):
                 user.is_protected = False
                 user.save()
             if created:
+                # todo: managment command or something to fetch tweets for user close to or over 3,200 to make sure we
+                # don't have any gaps if no one looks at their twarchive for awhile
                 if api_user.statuses_count > tweets_per_user:
                     user.old_timer_and_or_gabber=True
                 user.username = api_user.screen_name
                 user.save()
-            else: # If user protected and not just created, try a timeline fetch to see if we have permissions.
-                try:
-                    api.user_timeline(user.username, include_rts=True)
-                except tweepy.TweepError as e:
-                    return user, None, getattr(e.response, 'status', '')
+            try:
+                api.user_timeline(user.username, include_rts=True)
+            except tweepy.TweepError as e:
+                return user, None, getattr(e.response, 'status', '')
 
     if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
         if not api_user:
@@ -213,6 +203,4 @@ def fetch_page(username, page_num, auth=None):
         # occurs during a series of requests, a tweet could get lost because of page shift.
         if Tweet.objects.filter(user=user).count() < tweets_per_page*page_num:
             fetch_later_twitter_page(first_page_num, page_num)
-    else:
-        print 'already in database'
     return user, Tweet.objects.filter(user=user).order_by('created_at')[tweets_per_page*(page_num-1) : tweets_per_page*page_num], 200
