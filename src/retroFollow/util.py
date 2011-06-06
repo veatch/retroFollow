@@ -4,13 +4,14 @@ from string import lower
 import tweepy
 
 from models import Tweet, UserTwitter
-from settings import tweets_per_page, tweets_per_user, max_page, consumer_key, consumer_secret
+from settings import tweets_per_page, tweets_per_user, max_page, consumer_key, consumer_secret, write_consumer_key, write_consumer_secret, retrofollow1_key, retrofollow1_secret
 
-def setup_auth(request):
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    access_token = request.session.get('access_token')
-    if access_token:
-        auth.set_access_token(access_token[0], access_token[1])
+def setup_auth(request=None, key=consumer_key, secret=consumer_secret):
+    auth = tweepy.OAuthHandler(key, secret)
+    if request:
+        access_token = request.session.get('access_token')
+        if access_token:
+            auth.set_access_token(access_token[0], access_token[1])
     return auth
 
 def fetch_tweet(username, tweet_id, auth):
@@ -29,6 +30,26 @@ def fetch_tweet(username, tweet_id, auth):
     except Tweet.DoesNotExist:
         raise Http404
     return tweet, 200
+
+def check_rate_limit(auth=None):
+    api = tweepy.API(auth)
+    try:
+        rate_limit_status = api.rate_limit_status()
+    except tweepy.TweepError as e:
+        return None, getattr(e.response, 'status', '')
+    else:
+        return rate_limit_status.get('remaining_hits')
+
+def send_retro_tweets(tweets):
+    write_auth = setup_auth(key=write_consumer_key, secret=write_consumer_secret)
+    write_auth.set_access_token(retrofollow1_key, retrofollow1_secret)
+    api = tweepy.API(write_auth)
+    for tweet in tweets:
+        try:
+            api.retweet(id=tweet.tweet_id)
+        except tweepy.TweepError:
+            pass
+    # what exceptions to handle, and how?
 
 def fetch_page(username, page_num, auth=None):
     def utc_to_user_time(tweet_datetime):
@@ -173,7 +194,7 @@ def fetch_page(username, page_num, auth=None):
                     user.old_timer_and_or_gabber=True
                 user.username = api_user.screen_name
                 user.save()
-            try:
+            try:# todo: eliminate need to do this for users that were just created
                 api.user_timeline(user.username, include_rts=True)
             except tweepy.TweepError as e:
                 return user, None, getattr(e.response, 'status', '')

@@ -22,3 +22,27 @@ class Tweet(models.Model):
 
     def get_absolute_url(self):
         return reverse('rf_single_tweet', args=[self.user.username, self.tweet_id])
+
+    def create_schedule(self, follow, scheduled_time):
+        t = TweetSchedule(follow=follow, tweet_id=self.tweet_id, scheduled_time=scheduled_time)
+        t.save()
+
+class TweetSchedule(models.Model):
+    follow = models.ForeignKey(Following)
+    tweet_id = models.BigIntegerField()
+    scheduled_time = models.DateTimeField() # just created_at + user_following_through.timedelta
+
+# maybe pre-load everybody you follow, and keep track of update_needed_at a few hours/days early so we don't miss anything if we have failures
+
+# I think this class might be useful when there are a lot of users.
+# You could find earliest successful tweet time, and run the tweet schedule for that user.
+# Let's start with just one user, and we'll worry about scheduling later
+# NO. You need last successful tweet time somewhere to calculate range in management command.
+class RetroTweetSchedule(models.Model):
+    user = models.ForeignKey(UserTwitter)
+    last_tweet_attempt_time = models.DateTimeField()
+    last_successful_tweet_time = models.DateTimeField()
+    next_update_time = models.DateTimeField() #... for each source, find max scheduled_time, then find min of that list... subtract a few hours to build in time for failure
+
+#for source in everybody_on_schedule:
+#    if TweetSchedule.objects.filter(scheduled_time > now).count() > 0:
