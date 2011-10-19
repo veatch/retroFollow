@@ -2,7 +2,7 @@ from django.core.urlresolvers import reverse
 from django.db import models
 
 class UserTwitter(models.Model):
-    username = models.CharField(unique=True, max_length=32)
+    username = models.CharField(max_length=32)
     username_slug = models.CharField(unique=True, max_length=32)
     old_timer_and_or_gabber = models.BooleanField(default=False)
     utc_offset = models.IntegerField(blank=True, null=True)
